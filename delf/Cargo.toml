@@ -5,4 +5,5 @@ edition = "2021"
 
 [dependencies]
 derive-try-from-primitive = "1.0.0"
+derive_more = "0.99"
 nom = "5"

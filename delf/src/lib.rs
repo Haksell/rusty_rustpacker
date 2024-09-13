@@ -1,10 +1,14 @@
+mod addr;
 mod parse;
 
+use addr::Addr;
 use derive_try_from_primitive::TryFromPrimitive;
 use nom::{
     branch::alt,
     bytes::complete::{tag, take},
+    combinator::verify,
     error::context,
+    number::complete::le_u32,
     sequence::tuple,
     Offset,
 };
@@ -14,6 +18,7 @@ use std::{convert::TryFrom as _, fmt};
 pub struct File {
     pub typ: Type,
     pub machine: Machine,
+    pub entry_point: Addr,
 }
 
 impl File {
@@ -29,8 +34,14 @@ impl File {
             context("Padding", take(8_usize)),
         ))(i)?;
         let (i, (typ, machine)) = tuple((Type::parse, Machine::parse))(i)?;
+        let (i, _) = context("Version (bis)", verify(le_u32, |&x| x == 1))(i)?;
+        let (i, entry_point) = Addr::parse(i)?;
 
-        let res = Self { machine, typ };
+        let res = Self {
+            machine,
+            typ,
+            entry_point,
+        };
         Ok((i, res))
     }
 
