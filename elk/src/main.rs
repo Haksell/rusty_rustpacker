@@ -3,7 +3,8 @@ use std::{env, error::Error, fs};
 fn main() -> Result<(), Box<dyn Error>> {
     let input_path = env::args().nth(1).expect("usage: elk <file>");
     let input = fs::read(&input_path)?;
-    delf::File::parse(&input[..]).map_err(|e| format!("{:?}", e))?;
-    println!("input is a supported ELF file!");
+    let file =
+        delf::File::parse_or_print_error(&input[..]).unwrap_or_else(|| std::process::exit(1));
+    println!("{:#?}", file);
     Ok(())
 }
