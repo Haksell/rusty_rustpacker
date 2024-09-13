@@ -1,0 +1,3 @@
+[workspace]
+members = ["delf", "elk"]
+resolver = "2"
