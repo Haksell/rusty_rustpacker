@@ -1,5 +1,6 @@
+use delf::{Addr, File};
+use region::{protect, Protection};
 use std::{
-    cmp::min,
     env,
     error::Error,
     fs,
@@ -13,39 +14,43 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     println!("Analyzing {:?}...", input_path);
 
-    let file =
-        delf::File::parse_or_print_error(&input[..]).unwrap_or_else(|| std::process::exit(1));
+    let file = File::parse_or_print_error(&input[..]).unwrap_or_else(|| std::process::exit(1));
     println!("{:#?}", file);
 
-    println!("\nExecuting {:?}...", input_path);
-    let status = Command::new(&input_path).status()?;
-    if !status.success() {
-        return Err("process did not exit successfully".into());
-    }
-
     println!("\nDisassembling {:?}...", input_path);
-    let code = &input[0x1000..min(0x1025, input.len())];
-    ndisasm(code)?;
+    let code_ph = file
+        .program_headers
+        .iter()
+        .find(|ph| ph.mem_range().contains(&file.entry_point))
+        .expect("segment with entry point not found");
+    ndisasm(&code_ph.data[..], file.entry_point)?;
 
     println!("\nExecuting {:?} in memory...", input_path);
-    let entry_point = code.as_ptr();
-    println!("Entry point: {:?}", entry_point);
+    let code = &code_ph.data;
+    unsafe { protect(code.as_ptr(), code.len(), Protection::READ_WRITE_EXECUTE)? }
+    let entry_offset = file.entry_point - code_ph.vaddr;
+    let entry_point = unsafe { code.as_ptr().add(entry_offset.into()) };
+    println!("code         @ {:?}", code.as_ptr());
+    println!("entry offset @ {:?}", entry_offset);
+    println!("entry point  @ {:?}", entry_point);
     unsafe { jmp(entry_point) };
 
     Ok(())
 }
 
-fn ndisasm(code: &[u8]) -> Result<(), Box<dyn Error>> {
+fn ndisasm(code: &[u8], origin: Addr) -> Result<(), Box<dyn Error>> {
     let mut child = Command::new("ndisasm")
         .arg("-b")
         .arg("64")
+        .arg("-o")
+        .arg(format!("{}", origin.0))
         .arg("-")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .spawn()?;
     child.stdin.as_mut().unwrap().write_all(code)?;
     let output = child.wait_with_output()?;
-    println!("{}", String::from_utf8_lossy(&output.stdout));
+    print!("{}", String::from_utf8_lossy(&output.stdout));
     Ok(())
 }
 
